@@ -7,6 +7,8 @@ import pyscreenshot as ImageGrab
 import time
 import os
 from subprocess import call
+import requests
+
 
 try:
     import Image
@@ -54,15 +56,14 @@ def get_hq_trivia_set(image_path):
 	)
 
 def get_count_from_google_query(question, answer1, answer2, answer3):
-	return answer1
+
+	return "hello"
 
 
 while True:
 	question, answer1, answer2, answer3 = get_hq_trivia_set(IMAGE_PATH)
 	answer = get_count_from_google_query(question, answer1, answer2, answer3)
-
 	call(["say", answer])
-
 	time.sleep(1)
 
 
