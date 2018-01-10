@@ -24,7 +24,7 @@ IMAGE_PATH = 'hq-trivia.jpg'
 def image_path_to_image(image_path):
 	im=ImageGrab.grab(bbox=(x1,y1,x2,y2))
 	im.save("test.png")
-	return im
+	return Image.open(IMAGE_PATH)
 
 def get_question_and_answer_tuples():
 	return {
@@ -53,33 +53,14 @@ def get_hq_trivia_set(image_path):
 		for response_key, response_area in question_answers.items()
 	)
 
-def get_google_url(q):
-	q_encoded = urllib.parse.quote_plus(q)
-	return "https://www.google.com/search?q="+q_encoded+"&oq="+q_encoded
-
-def get_google_page(url):
-	# fixme
-	return BeautifulSoup("<div id='resultStats'>About 82,300 results<nobr> (0.51 seconds)&nbsp;</nobr></div>", 'html.parser')
-
-def extract_count_of_hits(page):
-	p = re.compile('[\d,]+')
-	return int(p.findall(page.find(id="resultStats").text)[0].replace(",", ""))
-
-def get_count_from_google_query(query):
-	google_url = get_google_url(query)
-	page = get_google_page(google_url)
-	count_of_hits = extract_count_of_hits(page)
-	return count_of_hits
-
-question, answer1, answer2, answer3 = get_hq_trivia_set(IMAGE_PATH)
+def get_count_from_google_query(question, answer1, answer2, answer3):
+	return answer1
 
 
 while True:
-	print(question)
-	print(answer1, get_count_from_google_query(question+" "+answer1))
-	print(answer2)
-	print(answer3)
-	answer = "one"
+	question, answer1, answer2, answer3 = get_hq_trivia_set(IMAGE_PATH)
+	answer = get_count_from_google_query(question, answer1, answer2, answer3)
+
 	call(["say", answer])
 
 	time.sleep(1)
