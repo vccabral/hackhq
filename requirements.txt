@@ -1,0 +1,8 @@
+beautifulsoup4==4.6.0
+EasyProcess==0.2.3
+numpy==1.13.3
+Pillow==5.0.0
+pygame==1.9.3
+pyscreenshot==0.4.2
+pytesseract==0.1.7
+SimpleCV==1.3
