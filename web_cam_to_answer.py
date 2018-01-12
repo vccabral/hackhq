@@ -60,26 +60,36 @@ def get_hq_trivia_set(image_path):
 async def get_count_from_google_query(question, answer1, answer2, answer3):
 	stopWords = set(stopwords.words('english'))
 	stopWordsExt = ["?",".",",","who","what","when","where","why","which","\""]
-	words = word_tokenize(question)
+	words = word_tokenize(question.replace("'",""))
 	parsedQuestion = "";
 	for w in words:
 		if w == "#": parsedQuestion = parsedQuestion + " " + "number"
 		elif w not in stopWords and w.lower() not in stopWordsExt: parsedQuestion = parsedQuestion + " " + w
 	loop = asyncio.get_event_loop();
+	futureQ = searchAnswer(parsedQuestion,"(" + answer1 +" OR " + answer2 + "OR" + answer3 + ")")
 	future1 = searchAnswer(parsedQuestion,answer1)
 	future2 = searchAnswer(parsedQuestion,answer2)
 	future3 = searchAnswer(parsedQuestion,answer3)
+	qResult = await futureQ
 	a1 = await future1
 	a2 = await future2
 	a3 = await future3
+
 	total1=int(a1.json()["queries"]["request"][0]["totalResults"])
 	total2=int(a2.json()["queries"]["request"][0]["totalResults"])
 	total3=int(a3.json()["queries"]["request"][0]["totalResults"])
-	print(parsedQuestion)
+	print("----------------------------------")
+	print("Parsed Question: " + parsedQuestion)
+	print("----------------------------------")
+	if "items" in qResult.json() and len(qResult.json()["items"]) > 0:
+		print(qResult.json()["items"][0]["snippet"])
+		print("----------------------------------")
 	print(answer1 + " : " + str(total1))
+	print("----------------------------------")
 	print(answer2 + " : " + str(total2))
+	print("----------------------------------")
 	print(answer3 + " : " + str(total3))
-
+	print("----------------------------------")
 	# if total1 > total2 and total1 > total3:
 	# 	call(["say",answer1])
 	# 	print(answer1)
@@ -99,11 +109,12 @@ loop = asyncio.get_event_loop()
 while True:
 	question, answer1, answer2, answer3 = get_hq_trivia_set(IMAGE_PATH)
 	if question != "" and answer1 != "" and answer2 != "" and answer3 != "":
-		print("Finding Answer: ")
+		print("\n\n")
+		print("Finding Answer...")
 		loop.run_until_complete(get_count_from_google_query(question, answer1, answer2, answer3))
-		time.sleep(4)
+		time.sleep(10)
 	else:
 		print("N/A")
-		time.sleep(1)
+		time.sleep(0.05)
 
 
