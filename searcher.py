@@ -8,6 +8,10 @@ from nltk.corpus import treebank
 import re
 import os
 from nltk.corpus import brown
+from pws import Google
+from pws import Bing
+import json
+from timeit import default_timer as timer
 
 pytesseract.pytesseract.tesseract_cmd = '/usr/local/bin/tesseract'
 
@@ -53,10 +57,10 @@ def image_path_to_image(x1, y1, x2, y2):
 
 def get_question_and_answer_tuples():
     return {
-        "question": (43, 383, 927, 787),
-        "answer1": (100, 860, 870, 960),
-        "answer2": (100, 1010, 870, 1140),
-        "answer3": (100, 1180, 870, 1300)
+        "question": (80, 460, 900, 845),
+        "answer1": (100, 885, 895, 960),
+        "answer2": (100, 1060, 895, 1125),
+        "answer3": (100, 1225, 895, 1300)
     }
 
 
@@ -127,44 +131,46 @@ async def find_answer(question_input, answer1, answer2, answer3):
     parsed_question = ' '.join(matches).replace(r'“\s|\s”', '"')
     inverse = True if 'NOT' in question_input else False
     line_str = "----------------------------------"
-    print(line_str + '\033[1m' + "\nParsed Question: " + parsed_question + '\033[0m' + "\n" + line_str)
-    future_q = get_google_results(parsed_question, "(" + answer1 + " OR " + answer2 + "OR" + answer3 + ")")
-    q_result = await future_q
-    result_preview = None
-    all_results = []
-    if "items" in q_result.json() and len(q_result.json()["items"]) > 0:
-        result_preview = q_result.json()["items"][0]["snippet"]
+    print(line_str + '\033[1m' + "\nInput Question: " + question_input + '\033[0m' + "\n" + line_str)
+
+    answer1Count = (get_google_results(question_input, answer1))['total_results']
+    answer2Count = (get_google_results(question_input, answer2))['total_results']
+    answer3Count = (get_google_results(question_input, answer3))['total_results']
+    finalAnswer= ""
+    if inverse:
+        finalAnswer = solveNegativeQuestion(answer1Count, answer2Count, answer3Count)
     else:
-        future_backup_q = get_google_results(parsed_question)
-        q_result2 = await future_backup_q
-        if "items" in q_result2.json() and len(q_result2.json()["items"]) > 0:
-            result_preview = q_result2.json()["items"][0]["snippet"]
-    if "items" in q_result.json() and result_preview is not None:  # TODO: simplify line
-        for item in q_result.json()["items"]:
-            all_results.insert(len(all_results), item["snippet"])
-    print(result_preview + "\n" + line_str)
-    answers = [answer1, answer2, answer3]
-    futures = []
-    # totals = []
-    for answer in answers:
-        future = get_google_results(parsed_question, answer)
-        futures.insert(len(futures), await future)
-    for index, future in enumerate(futures):
-        total = int(future.json()["queries"]["request"][0]["totalResults"])
-        # totals.push(len(totals),total)
-        found = False
-        for result in all_results:
-            if answers[index].lower() in result.lower():
-                found = True
-                break
-        if (answers[index].lower() in result_preview.lower().replace('\n', '') and not inverse) or found:
-            print('\033[94m\033[1m' + (answers[index] + " : {:,d}" + '\033[0m\n' + line_str).format(total))
-        else:
-            print((answers[index] + " : {:,d}" + "\n" + line_str).format(total))
+        finalAnswer = solveQuestion(answer1Count, answer2Count, answer3Count)
+
+    if finalAnswer is "answer1":
+        print(answer1)
+    elif finalAnswer is "answer2":
+        print(answer2)
+    elif finalAnswer is "answer3":
+        print(answer3)
+    else:
+        print("Something went wrong time to panic")
 
 
-def get_google_results(parsed_question, answer=""):
-    loop = asyncio.get_event_loop()
-    api_key = os.environ.get("GOOGLE_SEARCH_API_KEY")
-    url = "https://www.googleapis.com/customsearch/v1?key=" + api_key + "&cx=006735088913908788598:cdia39tiyvi&q="
-    return loop.run_in_executor(None, requests.get, url + " (" + parsed_question + ") " + answer)
+def solveNegativeQuestion(answer1Count, answer2Count, answer3Count):
+    if answer1Count < answer2Count and answer1Count < answer3Count:
+        return "answer1"
+    elif answer2Count < answer3Count:
+       return "answer2"
+    else:
+        return "answer3"
+
+def solveQuestion(answer1Count, answer2Count, answer3Count):
+    if answer1Count > answer2Count and answer1Count > answer3Count:
+        return "answer1"
+    elif answer2Count > answer3Count:
+        return "answer2"
+    else:
+        return "answer3"
+
+def get_google_results(parsed_question, answer):
+    return Google.search(query='' + parsed_question + ' ' + answer, num=5, start=2, country_code="es")
+    #print(Bing.search('hello world', 5, 2))
+
+def get_bing_results(parsed_question, answer=""):
+    return Bing.search('' + parsed_question + ' ' + answer, 5, 2)
