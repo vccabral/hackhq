@@ -4,6 +4,7 @@ import pyscreenshot as image_grab
 import pytesseract
 import nltk
 from nltk.tokenize import word_tokenize
+from nltk.corpus import treebank
 import re
 import os
 from nltk.corpus import brown
@@ -19,7 +20,7 @@ regexp_tagger = nltk.RegexpTagger([
     (r'.*able$', 'JJ'),
     (r'^[A-Z].*$', 'NNP'),
     (r'.*ness$', 'NN'),
-    (r'.*ly$', 'RB'),
+    (r'.*ly$', 'RB'),\
     (r'.*s$', 'NNS'),
     (r'.*ing$', 'VBG'),
     (r'.*ed$', 'VBD'),
@@ -37,7 +38,10 @@ cfg = {
     "AP+NN": "APN",
     "AP+NNS": "APNS",
     "CD+NN": "CDN",
-    "VBN+IN": "VIN"
+    "VBN+IN": "VIN",
+    "VB+JJ": "VBJ",
+    "AT+CD": "ACD",
+    "VBG+NN": "VBN",
 }
 
 
@@ -95,7 +99,6 @@ def normalize_tags(tagged):
 
 
 def get_matches(tags):
-    print(tags)
     merge = True
     while merge:
         merge = False
@@ -114,7 +117,7 @@ def get_matches(tags):
                 break
     matches = []
     for t in tags:
-        if t[1] in {"NNP", "NNI", "NN", "APN", "APNS", "QTN", "CDN", "VBN", "VIN"}:
+        if t[1] in {"NNP", "NNI", "NN", "APN", "APNS", "QTN", "CDN", "VBN", "VIN", "VBJ", "JJT", "ACD", "VBN"}:
             matches.append(t[0])
     return matches
 
@@ -124,33 +127,43 @@ async def find_answer(question_input, answer1, answer2, answer3):
     parsed_question = ' '.join(matches).replace(r'“\s|\s”', '"')
     inverse = True if 'NOT' in question_input else False
     line_str = "----------------------------------"
-    print(line_str + '\033[1m'  + "\nParsed Question: " + parsed_question + '\033[0m' + "\n" + line_str)
-    future_q = get_google_results(parsed_question)
+    print(line_str + '\033[1m' + "\nParsed Question: " + parsed_question + '\033[0m' + "\n" + line_str)
+    future_q = get_google_results(parsed_question, "(" + answer1 + " OR " + answer2 + "OR" + answer3 + ")")
     q_result = await future_q
-    result_preview = ""
+    result_preview = None
+    all_results = []
     if "items" in q_result.json() and len(q_result.json()["items"]) > 0:
         result_preview = q_result.json()["items"][0]["snippet"]
     else:
-        future_backup_q = get_google_results(parsed_question, "(" + answer1 + " OR " + answer2 + "OR" + answer3 + ")")
+        future_backup_q = get_google_results(parsed_question)
         q_result2 = await future_backup_q
         if "items" in q_result2.json() and len(q_result2.json()["items"]) > 0:
             result_preview = q_result2.json()["items"][0]["snippet"]
+    if "items" in q_result.json() and result_preview is not None:  # TODO: simplify line
+        for item in q_result.json()["items"]:
+            all_results.insert(len(all_results), item["snippet"])
     print(result_preview + "\n" + line_str)
     answers = [answer1, answer2, answer3]
     futures = []
+    # totals = []
     for answer in answers:
-        future = get_google_results(parsed_question,answer)
+        future = get_google_results(parsed_question, answer)
         futures.insert(len(futures), await future)
     for index, future in enumerate(futures):
         total = int(future.json()["queries"]["request"][0]["totalResults"])
-        if answers[index].lower() in result_preview.lower().replace('\n', ''):
+        # totals.push(len(totals),total)
+        found = False
+        for result in all_results:
+            if answers[index].lower() in result.lower():
+                found = True
+                break
+        if (answers[index].lower() in result_preview.lower().replace('\n', '') and not inverse) or found:
             print('\033[94m\033[1m' + (answers[index] + " : {:,d}" + '\033[0m\n' + line_str).format(total))
         else:
             print((answers[index] + " : {:,d}" + "\n" + line_str).format(total))
-    print(inverse)
 
 
-def get_google_results(parsed_question, answer = ""):
+def get_google_results(parsed_question, answer=""):
     loop = asyncio.get_event_loop()
     api_key = os.environ.get("GOOGLE_SEARCH_API_KEY")
     url = "https://www.googleapis.com/customsearch/v1?key=" + api_key + "&cx=006735088913908788598:cdia39tiyvi&q="
