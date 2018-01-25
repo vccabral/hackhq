@@ -58,9 +58,9 @@ def image_path_to_image(x1, y1, x2, y2):
 def get_question_and_answer_tuples():
     return {
         "question": (80, 460, 900, 845),
-        "answer1": (100, 885, 895, 960),
-        "answer2": (100, 1060, 895, 1125),
-        "answer3": (100, 1225, 895, 1300)
+        "answer1": (120, 885, 895, 960),
+        "answer2": (120, 1060, 895, 1125),
+        "answer3": (120, 1225, 895, 1300)
     }
 
 
@@ -133,43 +133,21 @@ async def find_answer(question_input, answer1, answer2, answer3):
     line_str = "----------------------------------"
     print(line_str + '\033[1m' + "\nInput Question: " + question_input + '\033[0m' + "\n" + line_str)
 
-    answer1Count = (get_google_results(question_input, answer1))['total_results']
-    answer2Count = (get_google_results(question_input, answer2))['total_results']
-    answer3Count = (get_google_results(question_input, answer3))['total_results']
+    results = { answer1 : (get_google_results(question_input, answer1))['total_results'],
+                answer2 : (get_google_results(question_input, answer2))['total_results'],
+                answer3 : (get_google_results(question_input, answer3))['total_results']
+              }
     finalAnswer= ""
     if inverse:
-        finalAnswer = solveNegativeQuestion(answer1Count, answer2Count, answer3Count)
+        finalAnswer = min(results.items(), key=lambda x: x[1])[0]
     else:
-        finalAnswer = solveQuestion(answer1Count, answer2Count, answer3Count)
+        finalAnswer = max(results.items(), key=lambda x: x[1])[0]
 
-    if finalAnswer is "answer1":
-        print(answer1)
-    elif finalAnswer is "answer2":
-        print(answer2)
-    elif finalAnswer is "answer3":
-        print(answer3)
-    else:
-        print("Something went wrong time to panic")
-
-
-def solveNegativeQuestion(answer1Count, answer2Count, answer3Count):
-    if answer1Count < answer2Count and answer1Count < answer3Count:
-        return "answer1"
-    elif answer2Count < answer3Count:
-       return "answer2"
-    else:
-        return "answer3"
-
-def solveQuestion(answer1Count, answer2Count, answer3Count):
-    if answer1Count > answer2Count and answer1Count > answer3Count:
-        return "answer1"
-    elif answer2Count > answer3Count:
-        return "answer2"
-    else:
-        return "answer3"
+    print(finalAnswer)
 
 def get_google_results(parsed_question, answer):
-    return Google.search(query='' + parsed_question + ' ' + answer, num=5, start=2, country_code="es")
+    print(Google.search(query='' + parsed_question + ' ' + answer, num=5, start=2, country_code="us"))
+    return Google.search(query='' + parsed_question + ' ' + answer, num=5, start=2, country_code="us")
     #print(Bing.search('hello world', 5, 2))
 
 def get_bing_results(parsed_question, answer=""):
