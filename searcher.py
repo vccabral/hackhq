@@ -4,7 +4,6 @@ import pyscreenshot as image_grab
 import pytesseract
 import nltk
 from nltk.tokenize import word_tokenize
-from nltk.corpus import treebank
 import re
 import os
 from nltk.corpus import brown
@@ -41,7 +40,11 @@ cfg = {
     "VBN+IN": "VIN",
     "VB+JJ": "VBJ",
     "AT+CD": "ACD",
-    "VBG+NN": "VBN",
+    "VBG+NN": "VNN",
+    "NN+NN": "NNN",
+    "NNN+NN": "NNN",
+    "NNP+NN": "NNPN",
+
 }
 
 
@@ -99,6 +102,7 @@ def normalize_tags(tagged):
 
 
 def get_matches(tags):
+    print(tags)
     merge = True
     while merge:
         merge = False
@@ -117,21 +121,30 @@ def get_matches(tags):
                 break
     matches = []
     for t in tags:
-        if t[1] in {"NNP", "NNI", "NN", "APN", "APNS", "QTN", "CDN", "VBN", "VIN", "VBJ", "JJT", "ACD", "VBN"}:
+        if t[1] in {"NNP", "NNI", "NN",
+                    "NNN", "APN", "APNS",
+                    "QTN", "CDN", "VBN",
+                    "VIN", "VBJ", "JJT",
+                    "ACD", "VNN", "NR",
+                    "NNPN", "JJ"}:
             matches.append(t[0])
     return matches
 
 
 async def find_answer(question_input, answer1, answer2, answer3):
+    answers = [answer1, answer2, answer3]
+    futures = []
+    search_totals = []
+    record_totals = []
+    all_results = []
+    result_preview = ""
     matches = get_matches(normalize_tags(bigram_tagger.tag(word_tokenize(question_input.replace('NOT', 'not')))))
     parsed_question = ' '.join(matches).replace(r'“\s|\s”', '"')
     inverse = True if 'NOT' in question_input else False
     line_str = "----------------------------------"
     print(line_str + '\033[1m' + "\nParsed Question: " + parsed_question + '\033[0m' + "\n" + line_str)
-    future_q = get_google_results(parsed_question, "(" + answer1 + " OR " + answer2 + "OR" + answer3 + ")")
+    future_q = get_google_results(parsed_question, "(" + answer1 + " OR " + answer2 + " OR " + answer3 + ")")
     q_result = await future_q
-    result_preview = None
-    all_results = []
     if "items" in q_result.json() and len(q_result.json()["items"]) > 0:
         result_preview = q_result.json()["items"][0]["snippet"]
     else:
@@ -139,28 +152,41 @@ async def find_answer(question_input, answer1, answer2, answer3):
         q_result2 = await future_backup_q
         if "items" in q_result2.json() and len(q_result2.json()["items"]) > 0:
             result_preview = q_result2.json()["items"][0]["snippet"]
-    if "items" in q_result.json() and result_preview is not None:  # TODO: simplify line
+    if "items" in q_result.json():
         for item in q_result.json()["items"]:
             all_results.insert(len(all_results), item["snippet"])
-    print(result_preview + "\n" + line_str)
-    answers = [answer1, answer2, answer3]
-    futures = []
-    # totals = []
+    if result_preview is not "":
+        print(result_preview + "\n" + line_str)
     for answer in answers:
-        future = get_google_results(parsed_question, answer)
+        future = get_google_results(parsed_question, "\"" + answer + "\"")
         futures.insert(len(futures), await future)
     for index, future in enumerate(futures):
         total = int(future.json()["queries"]["request"][0]["totalResults"])
-        # totals.push(len(totals),total)
-        found = False
+        search_totals.insert(len(search_totals), total)
+        records_found = 0
         for result in all_results:
             if answers[index].lower() in result.lower():
-                found = True
-                break
-        if (answers[index].lower() in result_preview.lower().replace('\n', '') and not inverse) or found:
-            print('\033[94m\033[1m' + (answers[index] + " : {:,d}" + '\033[0m\n' + line_str).format(total))
+                records_found += 1
+        record_totals.insert(len(record_totals), records_found)
+
+    for i in range(0,3):
+        is_search_answer = search_totals.index(max(search_totals)) == i
+        is_record_answer = record_totals.index(max(record_totals)) == i
+        if inverse:
+            is_search_answer = search_totals.index(min(search_totals)) == i
+            is_record_answer = record_totals.index(min(record_totals)) == i
+        if is_search_answer and is_record_answer:
+            print('\033[94m\033[1m' +
+                  (answers[i] + " : {:,d} / {:,d}" + '\n\033[0m' + line_str).format(search_totals[i],record_totals[i])
+                  )
+        elif is_search_answer:
+            print((answers[i] + " : \033[94m\033[1m{:,d}\033[0m / {:,d}" + '\n' + line_str)
+                  .format(search_totals[i],record_totals[i]))
+        elif is_record_answer:
+            print((answers[i] + " : {:,d} / \033[94m\033[1m{:,d}\033[0m" + '\n' + line_str)
+                  .format(search_totals[i], record_totals[i]))
         else:
-            print((answers[index] + " : {:,d}" + "\n" + line_str).format(total))
+            print((answers[i] + " : {:,d} / {:,d} " + "\n" + line_str).format(search_totals[i], record_totals[i]))
 
 
 def get_google_results(parsed_question, answer=""):
