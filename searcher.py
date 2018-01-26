@@ -44,6 +44,7 @@ cfg = {
     "NN+NN": "NNN",
     "NNN+NN": "NNN",
     "NNP+NN": "NNPN",
+    "RB+NN": "VBN"
 
 }
 
@@ -64,7 +65,7 @@ def get_question_and_answer_tuples():
 
 
 def image_to_string(image):
-    return pytesseract.image_to_string(image)
+    return pytesseract.image_to_string(image, lang='eng')
 
 
 def fix_multiline(words):
@@ -170,23 +171,23 @@ async def find_answer(question_input, answer1, answer2, answer3):
         record_totals.insert(len(record_totals), records_found)
 
     for i in range(0,3):
-        is_search_answer = search_totals.index(max(search_totals)) == i
-        is_record_answer = record_totals.index(max(record_totals)) == i
+        is_search_answer = search_totals.index(max(search_totals)) == i and sum(search_totals) is not 0
+        is_record_answer = record_totals.index(max(record_totals)) == i and sum(record_totals) is not 0
         if inverse:
             is_search_answer = search_totals.index(min(search_totals)) == i
             is_record_answer = record_totals.index(min(record_totals)) == i
         if is_search_answer and is_record_answer:
             print('\033[94m\033[1m' +
-                  (answers[i] + " : {:,d} / {:,d}" + '\n\033[0m' + line_str).format(search_totals[i],record_totals[i])
+                  (answers[i] + " : {:,d} / {:,d} results" + '\n\033[0m' + line_str).format(search_totals[i],record_totals[i])
                   )
         elif is_search_answer:
-            print((answers[i] + " : \033[94m\033[1m{:,d}\033[0m / {:,d}" + '\n' + line_str)
+            print((answers[i] + " : \033[94m\033[1m{:,d}\033[0m / {:,d} results" + '\n' + line_str)
                   .format(search_totals[i],record_totals[i]))
         elif is_record_answer:
-            print((answers[i] + " : {:,d} / \033[94m\033[1m{:,d}\033[0m" + '\n' + line_str)
+            print((answers[i] + " : {:,d} / \033[94m\033[1m{:,d} results\033[0m" + '\n' + line_str)
                   .format(search_totals[i], record_totals[i]))
         else:
-            print((answers[i] + " : {:,d} / {:,d} " + "\n" + line_str).format(search_totals[i], record_totals[i]))
+            print((answers[i] + " : {:,d} / {:,d} results " + "\n" + line_str).format(search_totals[i], record_totals[i]))
 
 
 def get_google_results(parsed_question, answer=""):
