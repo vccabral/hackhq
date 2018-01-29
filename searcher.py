@@ -19,12 +19,19 @@ regexp_tagger = nltk.RegexpTagger([
     (r'.*able$', 'JJ'),
     (r'^[A-Z].*$', 'NNP'),
     (r'.*ness$', 'NN'),
-    (r'.*ly$', 'RB'),\
+    (r'.*ly$', 'RB'),
     (r'.*s$', 'NNS'),
     (r'.*ing$', 'VBG'),
     (r'.*ed$', 'VBD'),
     (r'.*', 'NN'),
 ])
+
+url_encodings = {
+    ':': '%3A', '/': '%2F', '?': '%3F', '#': '%23', '[': '%5B', ']': '%5D', '@': '%40', '!': '%21', '$': '%24',
+    '&': '%26', "'": '%27', '(': '%28', ')': '%29', '*': '%2A', '+': '%2B', ',': '%2C', ';': '%3B', '=': '%3D',
+    '%': '%25', ' ': '+'
+}
+
 unigram_tagger = nltk.UnigramTagger(brown_train, backoff=regexp_tagger)
 bigram_tagger = nltk.BigramTagger(brown_train, backoff=unigram_tagger)
 
@@ -45,7 +52,6 @@ cfg = {
     "NNN+NN": "NNN",
     "NNP+NN": "NNPN",
     "RB+NN": "VBN"
-
 }
 
 
@@ -55,17 +61,19 @@ def image_path_to_image(x1, y1, x2, y2):
     return im
 
 
+# x1, y1, x2, y2
 def get_question_and_answer_tuples():
+    top_offset = 200
     return {
-        "question": (43, 383, 927, 787),
-        "answer1": (100, 860, 870, 960),
-        "answer2": (100, 1010, 870, 1140),
-        "answer3": (100, 1180, 870, 1300)
+        "question": (0, 0, 884, 340),
+        "answer1": (60, 480, 700, 550),
+        "answer2": (60, 650, 700, 720),
+        "answer3": (60, 825, 700, 895)
     }
 
 
 def image_to_string(image):
-    return pytesseract.image_to_string(image, lang='eng')
+    return pytesseract.image_to_string(image)
 
 
 def fix_multiline(words):
@@ -103,7 +111,6 @@ def normalize_tags(tagged):
 
 
 def get_matches(tags):
-    print(tags)
     merge = True
     while merge:
         merge = False
@@ -127,7 +134,8 @@ def get_matches(tags):
                     "QTN", "CDN", "VBN",
                     "VIN", "VBJ", "JJT",
                     "ACD", "VNN", "NR",
-                    "NNPN", "JJ"}:
+                    "NNPN", "JJ", "RB",
+                    "RBS", "VBD"}:
             matches.append(t[0])
     return matches
 
@@ -143,6 +151,7 @@ async def find_answer(question_input, answer1, answer2, answer3):
     parsed_question = ' '.join(matches).replace(r'“\s|\s”', '"')
     inverse = True if 'NOT' in question_input else False
     line_str = "----------------------------------"
+    print("Question: " + question_input)
     print(line_str + '\033[1m' + "\nParsed Question: " + parsed_question + '\033[0m' + "\n" + line_str)
     future_q = get_google_results(parsed_question, "(" + answer1 + " OR " + answer2 + " OR " + answer3 + ")")
     q_result = await future_q
@@ -159,7 +168,7 @@ async def find_answer(question_input, answer1, answer2, answer3):
     if result_preview is not "":
         print(result_preview + "\n" + line_str)
     for answer in answers:
-        future = get_google_results(parsed_question, "\"" + answer + "\"")
+        future = get_google_results(parsed_question, "(|\"" + answer + "\" or " + answer + ")")
         futures.insert(len(futures), await future)
     for index, future in enumerate(futures):
         total = int(future.json()["queries"]["request"][0]["totalResults"])
@@ -170,28 +179,34 @@ async def find_answer(question_input, answer1, answer2, answer3):
                 records_found += 1
         record_totals.insert(len(record_totals), records_found)
 
-    for i in range(0,3):
-        is_search_answer = search_totals.index(max(search_totals)) == i and sum(search_totals) is not 0
-        is_record_answer = record_totals.index(max(record_totals)) == i and sum(record_totals) is not 0
+    for i in range(0, 3):
+        is_search_answer = search_totals.index(max(search_totals)) == i and search_totals[1:] != search_totals[:-1]
+        is_record_answer = record_totals.index(max(record_totals)) == i and record_totals[1:] != record_totals[:-1]
         if inverse:
             is_search_answer = search_totals.index(min(search_totals)) == i
             is_record_answer = record_totals.index(min(record_totals)) == i
         if is_search_answer and is_record_answer:
-            print('\033[94m\033[1m' +
-                  (answers[i] + " : {:,d} / {:,d} results" + '\n\033[0m' + line_str).format(search_totals[i],record_totals[i])
-                  )
+            print(
+                '\033[94m\033[1m' +(answers[i] + " : {:,d} / {:,d} result(s)" + '\n\033[0m' + line_str)
+                .format(search_totals[i], record_totals[i]))
         elif is_search_answer:
-            print((answers[i] + " : \033[94m\033[1m{:,d}\033[0m / {:,d} results" + '\n' + line_str)
-                  .format(search_totals[i],record_totals[i]))
+            print((answers[i] + " : \033[94m\033[1m{:,d}\033[0m / {:,d} result(s)" + '\n' + line_str)
+                  .format(search_totals[i], record_totals[i]))
         elif is_record_answer:
-            print((answers[i] + " : {:,d} / \033[94m\033[1m{:,d} results\033[0m" + '\n' + line_str)
+            print((answers[i] + " : {:,d} / \033[94m\033[1m{:,d} result(s)\033[0m" + '\n' + line_str)
                   .format(search_totals[i], record_totals[i]))
         else:
-            print((answers[i] + " : {:,d} / {:,d} results " + "\n" + line_str).format(search_totals[i], record_totals[i]))
+            print((answers[i] + " : {:,d} / {:,d} result(s) " + "\n" + line_str)
+                  .format(search_totals[i],record_totals[i]))
 
 
-def get_google_results(parsed_question, answer=""):
+def get_google_results(parsed_q, answer=""):
+    encoded_question = parsed_q
+    encoded_answer = answer
+    for character, encoding in url_encodings.items():
+        encoded_question = encoded_question.replace(character, encoding)
+        encoded_answer = encoded_answer.replace(character, encoding)
     loop = asyncio.get_event_loop()
     api_key = os.environ.get("GOOGLE_SEARCH_API_KEY")
     url = "https://www.googleapis.com/customsearch/v1?key=" + api_key + "&cx=006735088913908788598:cdia39tiyvi&q="
-    return loop.run_in_executor(None, requests.get, url + " (" + parsed_question + ") " + answer)
+    return loop.run_in_executor(None, requests.get, url + " (" + encoded_question + ") " + encoded_answer)
